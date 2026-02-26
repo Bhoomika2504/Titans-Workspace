@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { logActivity } from './utils/logger';
+import { useAuth } from './context/AuthContext'; 
 import { 
   ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, 
-  Tag, AlignLeft, Trash2, Edit3, Grid, CalendarDays, Forward, Info
+  Tag, AlignLeft, Trash2, Edit3, Grid, CalendarDays, Forward, Info, Eye
 } from 'lucide-react';
 
-const EventCalendar = ({ role }) => {
+const EventCalendar = () => {
   const [view, setView] = useState('month'); 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
@@ -16,6 +17,14 @@ const EventCalendar = ({ role }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [dayEventsList, setDayEventsList] = useState([]); 
   
+  // --- RBAC & GLOBAL STATE ---
+  const { userData, role, viewModeArchive } = useAuth(); 
+  const userName = userData?.name || "Unknown User";
+  const userPosition = userData?.position || "Member";
+  
+  // Strict RBAC: Only admin/executives can create or edit events
+  const isLeadership = role === 'admin' || role === 'executive';
+
   const [formData, setFormData] = useState({ 
     title: '', category: 'None', eventIncharge: '', description: '', date: '', repeat: 'once' 
   });
@@ -26,34 +35,43 @@ const EventCalendar = ({ role }) => {
   };
 
   useEffect(() => {
+    if (viewModeArchive) {
+      setEvents(viewModeArchive.events || []);
+      return;
+    }
+
     const unsubscribe = onSnapshot(collection(db, "events"), (snap) => {
       setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return () => unsubscribe();
-  }, []);
+  }, [viewModeArchive]);
 
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
 
   const handleSaveEvent = async (e) => {
     e.preventDefault();
+    if (!isLeadership || viewModeArchive) return;
+
     const finalData = { ...formData, color: categoryColors[formData.category], createdAt: serverTimestamp() };
     try {
       if (isEditing) {
         await updateDoc(doc(db, "events", selectedEvent.id), finalData);
-        await logActivity("Bhoomika Wandhekar", "President", "Updated Event", finalData.title);
+        await logActivity(userName, userPosition, "Updated Event", finalData.title);
       } else {
         await addDoc(collection(db, "events"), finalData);
-        await logActivity("Bhoomika Wandhekar", "President", "Created Event", finalData.title);
+        await logActivity(userName, userPosition, "Created Event", finalData.title);
       }
       closeModal();
     } catch (err) { console.error(err); }
   };
 
   const handleDelete = async (id, title) => {
+    if (!isLeadership || viewModeArchive) return;
+
     if (window.confirm(`Delete ${title}?`)) {
       await deleteDoc(doc(db, "events", id));
-      await logActivity("Bhoomika Wandhekar", "President", "Deleted Event", title);
+      await logActivity(userName, userPosition, "Deleted Event", title);
       closeModal();
     }
   };
@@ -66,7 +84,6 @@ const EventCalendar = ({ role }) => {
     setFormData({ title: '', category: 'None', eventIncharge: '', description: '', date: '', repeat: 'once' });
   };
 
-  // Restored: Logic to view info first. No automatic "Add" on click.
   const onDateClick = (dateStr) => {
     const filtered = events.filter(e => e.date === dateStr);
     if (filtered.length > 0) {
@@ -77,7 +94,6 @@ const EventCalendar = ({ role }) => {
       }
       setShowModal(true);
     }
-    // If filtered.length === 0, we do nothing. "New Event" is reserved for the button.
   };
 
   const getPieStyle = (dayEvents) => {
@@ -94,7 +110,13 @@ const EventCalendar = ({ role }) => {
 
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto antialiased">
-      {/* FIXED TOOLBAR ALIGNMENT */}
+      
+      {viewModeArchive && (
+        <div className="bg-emerald-50 text-emerald-800 p-3 text-center text-xs font-bold uppercase tracking-widest rounded-2xl border-2 border-emerald-500 shadow-sm flex justify-center items-center gap-2 animate-in slide-in-from-top-4">
+          <Eye size={16} className="text-emerald-600" /> Viewing Historical Calendar for {viewModeArchive.id}
+        </div>
+      )}
+
       <header className="flex justify-between items-center bg-white p-2.5 px-5 rounded-2xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-4">
           <h2 className="text-sm font-black text-[#1B264F] uppercase tracking-tighter">
@@ -110,9 +132,13 @@ const EventCalendar = ({ role }) => {
             <button onClick={() => setView('year')} className={`px-3 py-1.5 rounded-lg text-[9px] font-bold flex items-center gap-2 transition ${view === 'year' ? 'bg-[#1B264F] text-white' : 'text-slate-400'}`}><Grid size={12}/> Year</button>
             <button onClick={() => setView('month')} className={`px-3 py-1.5 rounded-lg text-[9px] font-bold flex items-center gap-2 transition ${view === 'month' ? 'bg-[#1B264F] text-white' : 'text-slate-400'}`}><CalendarDays size={12}/> Month</button>
           </div>
-          <button onClick={() => { setSelectedEvent(null); setIsEditing(false); setShowModal(true); }} className="bg-[#1B264F] text-white px-4 py-1.5 rounded-lg font-bold text-[9px] uppercase shadow-lg flex items-center gap-1.5">
-            <Plus size={14}/> New Event
-          </button>
+          
+          {/* RBAC: ONLY LEADERSHIP CAN ADD EVENTS */}
+          {isLeadership && !viewModeArchive && (
+            <button onClick={() => { setSelectedEvent(null); setIsEditing(false); setShowModal(true); }} className="bg-[#1B264F] text-white px-4 py-1.5 rounded-lg font-bold text-[9px] uppercase shadow-lg flex items-center gap-1.5">
+              <Plus size={14}/> New Event
+            </button>
+          )}
         </div>
       </header>
 
@@ -160,7 +186,6 @@ const EventCalendar = ({ role }) => {
         </div>
       )}
 
-      {/* ADMIN MODAL: VIEW INFO FIRST */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl border-t-[8px]" style={{ borderColor: selectedEvent ? selectedEvent.color : (dayEventsList.length > 0 ? '#1B264F' : categoryColors[formData.category]) }}>
@@ -171,7 +196,6 @@ const EventCalendar = ({ role }) => {
               <button onClick={closeModal}><X size={18}/></button>
             </div>
 
-            {/* List for multiple events */}
             {dayEventsList.length > 1 && !selectedEvent && (
               <div className="space-y-3">
                 {dayEventsList.map(e => (
@@ -189,7 +213,6 @@ const EventCalendar = ({ role }) => {
               </div>
             )}
 
-            {/* Event Display Logic */}
             {selectedEvent && !isEditing ? (
               <div className="space-y-4">
                 <div className="bg-slate-50 p-4 rounded-2xl">
@@ -200,16 +223,19 @@ const EventCalendar = ({ role }) => {
                    <div className="flex items-center gap-3"><Tag size={14} className="text-blue-500"/><p className="text-[11px] font-bold uppercase">{selectedEvent.category}</p></div>
                    <div className="flex items-start gap-3"><AlignLeft size={14} className="text-slate-300"/><p className="text-[11px] text-slate-600 leading-relaxed">{selectedEvent.description}</p></div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 pt-4 border-t">
-                  <button onClick={() => { setFormData(selectedEvent); setIsEditing(true); }} className="p-2 bg-slate-100 rounded-xl flex flex-col items-center gap-1 hover:bg-slate-200 transition"><Edit3 size={14}/><span className="text-[8px] font-bold">EDIT</span></button>
-                  <button onClick={() => {/* postpone */}} className="p-2 bg-blue-50 text-blue-600 rounded-xl flex flex-col items-center gap-1 hover:bg-blue-100 transition"><Forward size={14}/><span className="text-[8px] font-bold">POSTPONE</span></button>
-                  <button onClick={() => handleDelete(selectedEvent.id, selectedEvent.title)} className="p-2 bg-red-50 text-red-600 rounded-xl flex flex-col items-center gap-1 hover:bg-red-100 transition"><Trash2 size={14}/><span className="text-[8px] font-bold">REMOVE</span></button>
-                </div>
+                
+                {/* RBAC: ONLY LEADERSHIP CAN EDIT OR DELETE EVENTS */}
+                {isLeadership && !viewModeArchive && (
+                  <div className="grid grid-cols-3 gap-2 pt-4 border-t">
+                    <button onClick={() => { setFormData(selectedEvent); setIsEditing(true); }} className="p-2 bg-slate-100 rounded-xl flex flex-col items-center gap-1 hover:bg-slate-200 transition"><Edit3 size={14}/><span className="text-[8px] font-bold">EDIT</span></button>
+                    <button onClick={() => {/* postpone */}} className="p-2 bg-blue-50 text-blue-600 rounded-xl flex flex-col items-center gap-1 hover:bg-blue-100 transition"><Forward size={14}/><span className="text-[8px] font-bold">POSTPONE</span></button>
+                    <button onClick={() => handleDelete(selectedEvent.id, selectedEvent.title)} className="p-2 bg-red-50 text-red-600 rounded-xl flex flex-col items-center gap-1 hover:bg-red-100 transition"><Trash2 size={14}/><span className="text-[8px] font-bold">REMOVE</span></button>
+                  </div>
+                )}
               </div>
             ) : null}
 
-            {/* Creation/Edit Form */}
-            {(!selectedEvent && dayEventsList.length === 0) || isEditing ? (
+            {((!selectedEvent && dayEventsList.length === 0) || isEditing) && isLeadership ? (
               <form onSubmit={handleSaveEvent} className="space-y-3">
                 <input placeholder="Event Name" required className="w-full p-3 text-xs bg-slate-50 border rounded-xl outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}/>
                 <select className="w-full p-3 text-xs bg-slate-50 border rounded-xl outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>

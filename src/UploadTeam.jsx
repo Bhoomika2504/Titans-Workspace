@@ -12,15 +12,15 @@ const UploadTeam = () => {
     { email: "vicepresident.titans@tcoer.edu.in", name: "Imdad Bagwan", position: "Vice President", year: "TE", role: "executive", hierarchyLevel: 2 },
     { email: "secretary.titans@tcoer.edu.in", name: "Shivam Bairagya", position: "Secretary", year: "BE", role: "executive", hierarchyLevel: 3 },
     { email: "treasurer.titans@tcoer.edu.in", name: "Mahadev Swami", position: "Treasurer", year: "TE", role: "member", hierarchyLevel: 4 },
-    { email: "associatetreasurer.titans@tcoer.edu.in", name: "Soundarya Patil", position: "Associate Treasurer", year: "TE", role: "member", hierarchyLevel: 5 },
+    { email: "associatetreasurer.titans@tcoer.edu.in", name: "Soundarya Patil", position: "Associate Treasurer", year: "TE", role: "member", hierarchyLevel: 4 },
     
     // CULTURAL TEAM
     { email: "culturalsecretary.titans@tcoer.edu.in", name: "Harshada Tavhare", position: "Cultural Secretary", year: "TE", role: "member", hierarchyLevel: 4 },
     { email: "culturalcoordinator.titans@tcoer.edu.in", name: "Aashita Somvanshi", position: "Cultural Coordinator", year: "SE", role: "member", hierarchyLevel: 5 },
-    { email: "culturalassociate.titans@tcoer.edu.in", name: "Yugeen Nandgaonkar", position: "Cultural Associate", year: "SE", role: "member", hierarchyLevel: 6 },
+    { email: "culturalassociate.titans@tcoer.edu.in", name: "Yugeen Nandgaonkar", position: "Cultural Associate", year: "SE", role: "member", hierarchyLevel: 5 },
     { email: "artcoordinator.titans@tcoer.edu.in", name: "Sakshi Mane", position: "Art Coordinator", year: "TE", role: "member", hierarchyLevel: 5 },
     { email: "eventcoordinator.titans@tcoer.edu.in", name: "Saniya Sande", position: "Event Coordinator", year: "SE", role: "member", hierarchyLevel: 5 },
-    { email: "eventassistant.titans@tcoer.edu.in", name: "Sanika Bhogawade", position: "Event Assistant", year: "SE", role: "member", hierarchyLevel: 6 },
+    { email: "eventassistant.titans@tcoer.edu.in", name: "Sanika Bhogawade", position: "Event Assistant", year: "SE", role: "member", hierarchyLevel: 5 },
     { email: "dancecoordinator.titans@tcoer.edu.in", name: "Sailaxami Pasupuleti", position: "Dance Coordinator", year: "SE", role: "member", hierarchyLevel: 5 },
     
     // SPORT TEAM
@@ -34,8 +34,8 @@ const UploadTeam = () => {
     // TECHNICAL TEAM
     { email: "technicalsecretary.titans@tcoer.edu.in", name: "Arsalaan Khan", position: "Technical Secretary", year: "SE", role: "member", hierarchyLevel: 4 },
     { email: "technicalcoordinator.titans@tcoer.edu.in", name: "Adarsh Bhande", position: "Technical Coordinator", year: "SE", role: "member", hierarchyLevel: 5 },
-    { email: "developer.titans@tcoer.edu.in", name: "Stavan Shalmon Padale", position: "Developer", year: "SE", role: "member", hierarchyLevel: 6 },
-    { email: "technicalassociate.titans@tcoer.edu.in", name: "Ananya Sardar", position: "Technical Associate", year: "SE", role: "member", hierarchyLevel: 6 },
+    { email: "developer.titans@tcoer.edu.in", name: "Stavan Shalmon Padale", position: "Developer", year: "SE", role: "member", hierarchyLevel: 5 },
+    { email: "technicalassociate.titans@tcoer.edu.in", name: "Ananya Sardar", position: "Technical Associate", year: "SE", role: "member", hierarchyLevel: 5 },
     
     // PR & MARKETING TEAM
     { email: "prmarketinglead.titans@tcoer.edu.in", name: "Abduldiyan Irfan Deshmukh", position: "PR & Marketing Lead", year: "TE", role: "member", hierarchyLevel: 4 },
@@ -45,15 +45,15 @@ const UploadTeam = () => {
     // MULTIMEDIA TEAM
     { email: "multimediateamlead.titans@tcoer.edu.in", name: "Sakshi Bipin Kamble", position: "Multimedia Team Lead", year: "TE", role: "member", hierarchyLevel: 4 },
     { email: "socialmediacoordinator.titans@tcoer.edu.in", name: "Ishwari Kalaskar", position: "Social Media Coordinator", year: "TE", role: "member", hierarchyLevel: 5 },
-    { email: "designer.titans@tcoer.edu.in", name: "Kunal Jadhav", position: "Designer", year: "SE", role: "member", hierarchyLevel: 6 },
-    { email: "associatedesigner.titans@tcoer.edu.in", name: "Shritej Jathar", position: "Associate Designer", year: "SE", role: "member", hierarchyLevel: 6 },
-    { email: "videographereditor.titans@tcoer.edu.in", name: "Parth Adawade", position: "Videographer & Editor", year: "SE", role: "member", hierarchyLevel: 6 },
+    { email: "designer.titans@tcoer.edu.in", name: "Kunal Jadhav", position: "Designer", year: "SE", role: "member", hierarchyLevel: 5 },
+    { email: "associatedesigner.titans@tcoer.edu.in", name: "Shritej Jathar", position: "Associate Designer", year: "SE", role: "member", hierarchyLevel: 5 },
+    { email: "videographereditor.titans@tcoer.edu.in", name: "Parth Adawade", position: "Videographer & Editor", year: "SE", role: "member", hierarchyLevel: 5 },
     
     // DISCIPLINE TEAM
     { email: "disciplineteamlead.titans@tcoer.edu.in", name: "Vaibhav Gadhave", position: "Discipline Team Lead", year: "TE", role: "member", hierarchyLevel: 4 },
     { email: "disciplinecoordinator.titans@tcoer.edu.in", name: "Payal Ranjane", position: "Discipline Coordinator", year: "SE", role: "member", hierarchyLevel: 5 },
-    { email: "disciplineassociate1.titans@tcoer.edu.in", name: "Vivekanand Koli", position: "Discipline Associate", year: "SE", role: "member", hierarchyLevel: 6 },
-    { email: "disciplineassociate2.titans@tcoer.edu.in", name: "Umesh Patil", position: "Discipline Associate", year: "SE", role: "member", hierarchyLevel: 6 },
+    { email: "disciplineassociate1.titans@tcoer.edu.in", name: "Vivekanand Koli", position: "Discipline Associate", year: "SE", role: "member", hierarchyLevel: 5 },
+    { email: "disciplineassociate2.titans@tcoer.edu.in", name: "Umesh Patil", position: "Discipline Associate", year: "SE", role: "member", hierarchyLevel: 5 },
     
     // DRAFTING TEAM
     { email: "documentationteamlead.titans@tcoer.edu.in", name: "Shruti Sathe", position: "Documentation Team Lead", year: "TE", role: "member", hierarchyLevel: 4 },

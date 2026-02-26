@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, onSnapshot, addDoc, query, where, serverTimestamp, updateDoc, doc, getDocs } from 'firebase/firestore';
 import { logActivity } from './utils/logger';
+import { useAuth } from './context/AuthContext'; 
 import { 
   Plus, Users, Calendar, Clock, AlignLeft, ShieldCheck, 
   Send, CheckCircle2, Edit3, MessageSquare, RotateCcw, X, 
-  ChevronRight, ChevronLeft, Bell, Info
+  ChevronRight, ChevronLeft, Bell, Info, Eye
 } from 'lucide-react';
 
-const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
+const Jovial = () => {
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState('');
   const [tasks, setTasks] = useState([]);
@@ -20,18 +21,29 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
   const [viewingTask, setViewingTask] = useState(null); 
   const [updateText, setUpdateText] = useState("");
 
+  // --- RBAC & GLOBAL STATE ---
+  const { userData, role, viewModeArchive } = useAuth(); 
+  const userName = userData?.name || "Unknown User";
+  
+  // Strict RBAC Rules
+  const isLeadership = role === 'admin' || role === 'executive';
+
   const [eventForm, setEventForm] = useState({ title: '', date: '', category: 'Technical', eventIncharge: '', description: '' });
   const [taskForm, setTaskForm] = useState({ taskName: '', assignedTo: '', startDate: '', endDate: '', teamUpWith: '', description: '' });
 
   const categoryColors = { "None": "#1B264F", "Coding Club": "#3B82F6", "Art Club": "#EC4899", "Technical": "#F97316", "Cultural": "#10B981", "Sports": "#06B6D4" };
   const statuses = ['todo', 'progress', 'review', 'completed'];
 
-  // Access Helpers
-  const isPresident = userName === "Bhoomika Wandhekar";
-  const isVP = userName === "Imdad Bagwan";
-  const isLeadership = isPresident || isVP;
-
   useEffect(() => {
+    if (viewModeArchive) {
+      const archivedEvents = viewModeArchive.events || [];
+      setEvents(archivedEvents);
+      if (archivedEvents.length > 0 && !selectedEventId) {
+        setSelectedEventId(archivedEvents[0].id);
+      }
+      return;
+    }
+
     const unsubEvents = onSnapshot(collection(db, "events"), (snap) => {
       const evs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setEvents(evs);
@@ -47,20 +59,28 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
     
     loadMembers();
     return () => unsubEvents();
-  }, [selectedEventId]);
+  }, [selectedEventId, viewModeArchive]);
 
   useEffect(() => {
     if (!selectedEventId) return;
+
+    if (viewModeArchive) {
+      const archivedTasks = viewModeArchive.jovial_tasks || viewModeArchive.tasks || [];
+      setTasks(archivedTasks.filter(t => t.eventId === selectedEventId));
+      return;
+    }
+
     const q = query(collection(db, "jovial_tasks"), where("eventId", "==", selectedEventId));
     const unsubTasks = onSnapshot(q, (snap) => {
       setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => console.error("Task fetch error:", error));
     
     return () => unsubTasks();
-  }, [selectedEventId]);
+  }, [selectedEventId, viewModeArchive]);
 
   const handleCreateEvent = async (e) => {
     e.preventDefault();
+    if (!isLeadership) return;
     const finalEvent = { ...eventForm, color: categoryColors[eventForm.category], createdAt: serverTimestamp() };
     await addDoc(collection(db, "events"), finalEvent);
     setShowEventModal(false);
@@ -69,6 +89,7 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
+    if (!isLeadership) return;
     const newTask = { 
       ...taskForm, 
       eventId: selectedEventId, 
@@ -82,12 +103,13 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
   };
 
   const moveTask = async (taskId, newStatus) => {
+    if (viewModeArchive) return;
+
     const task = tasks.find(t => t.id === taskId);
     const isAssigned = task.assignedTo === userName || task.teamUpWith?.includes(userName);
     
-    // Only leadership or assigned members can move tasks
     if (!isLeadership && !isAssigned) {
-      alert("Only assigned members or leadership can move this task.");
+      alert("Permission Denied: Only leadership or the assigned member can move this task.");
       return;
     }
 
@@ -95,17 +117,20 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
   };
 
   const addUpdate = async () => {
-    if (!updateText.trim() || !viewingTask) return;
+    if (!updateText.trim() || !viewingTask || viewModeArchive) return;
     const updates = [...(viewingTask.updates || [])];
     updates.push({ text: updateText, addedBy: userName, time: new Date().toLocaleTimeString() });
     
     await updateDoc(doc(db, "jovial_tasks", viewingTask.id), { updates });
     setUpdateText("");
-    setViewingTask(null); // Close modal after update
+    setViewingTask(null);
   };
 
   const notifyLeadership = async (task) => {
+    if (viewModeArchive) return;
     const currentEvent = events.find(e => e.id === selectedEventId);
+    
+    // We notify Admins dynamically in a real app, but for now we fallback to standard notifications
     const recipients = new Set(["Bhoomika Wandhekar", "Imdad Bagwan"]); 
     if (currentEvent?.eventIncharge) recipients.add(currentEvent.eventIncharge);
 
@@ -123,6 +148,13 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto antialiased">
+      
+      {viewModeArchive && (
+        <div className="bg-emerald-50 text-emerald-800 p-3 text-center text-xs font-bold uppercase tracking-widest rounded-2xl border-2 border-emerald-500 shadow-sm flex justify-center items-center gap-2 animate-in slide-in-from-top-4">
+          <Eye size={16} className="text-emerald-600" /> Viewing Historical Workspace for {viewModeArchive.id}
+        </div>
+      )}
+
       {/* HEADER */}
       <header className="flex justify-between items-center bg-white p-3 px-5 rounded-2xl shadow-sm border border-slate-200">
         <div className="flex flex-col">
@@ -131,18 +163,18 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
             {events.length > 0 ? events.map(e => <option key={e.id} value={e.id}>{e.title}</option>) : <option>No Events Found</option>}
           </select>
         </div>
-        <div className="flex gap-2">
-          {isLeadership && (
+        
+        {/* RBAC: ONLY LEADERSHIP CAN CREATE EVENTS AND TASKS */}
+        {!viewModeArchive && isLeadership && (
+          <div className="flex gap-2">
             <button onClick={() => setShowEventModal(true)} className="bg-slate-100 text-[#1B264F] px-4 py-2 rounded-xl font-bold text-[10px] uppercase shadow-sm flex items-center gap-1.5 hover:bg-slate-200 transition">
               <Calendar size={14}/> New Event
             </button>
-          )}
-          {isLeadership && (
             <button onClick={() => setShowTaskModal(true)} className="bg-[#1B264F] text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase shadow-lg flex items-center gap-1.5 hover:bg-slate-800 transition">
               <Plus size={14}/> Add Task
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </header>
 
       {/* KANBAN BOARD */}
@@ -155,6 +187,9 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
             <div className="space-y-3">
               {tasks.filter(t => t.status === col).map(task => {
                 const isAssigned = task.assignedTo === userName || task.teamUpWith?.includes(userName);
+                // Can move if they are leadership OR if it is assigned to them
+                const canMoveTask = isLeadership || isAssigned;
+
                 return (
                   <div key={task.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 group relative">
                     <div className="flex justify-between items-start mb-2">
@@ -163,15 +198,17 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
                     </div>
                     <h5 className="text-xs font-bold text-[#1B264F] mb-1">{task.taskName}</h5>
                     
-                    {/* RESTORED: Task Description Display */}
                     <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">{task.description}</p>
                     
-                    <div className="flex justify-between mt-4 border-t border-slate-50 pt-3">
-                      <button disabled={col === 'todo'} onClick={() => moveTask(task.id, statuses[statuses.indexOf(col)-1])} className="p-1 hover:bg-slate-100 rounded disabled:opacity-10"><ChevronLeft size={14}/></button>
-                      <button disabled={col === 'completed'} onClick={() => moveTask(task.id, statuses[statuses.indexOf(col)+1])} className="p-1 hover:bg-slate-100 rounded disabled:opacity-10"><ChevronRight size={14}/></button>
-                    </div>
+                    {/* RBAC MOVEMENT BUTTONS */}
+                    {!viewModeArchive && canMoveTask && (
+                      <div className="flex justify-between mt-4 border-t border-slate-50 pt-3">
+                        <button disabled={col === 'todo'} onClick={() => moveTask(task.id, statuses[statuses.indexOf(col)-1])} className="p-1 hover:bg-slate-100 rounded disabled:opacity-10"><ChevronLeft size={14}/></button>
+                        <button disabled={col === 'completed'} onClick={() => moveTask(task.id, statuses[statuses.indexOf(col)+1])} className="p-1 hover:bg-slate-100 rounded disabled:opacity-10"><ChevronRight size={14}/></button>
+                      </div>
+                    )}
 
-                    {col === 'completed' && isAssigned && (
+                    {col === 'completed' && isAssigned && !viewModeArchive && (
                       <button onClick={() => notifyLeadership(task)} className="w-full mt-3 bg-[#FFB100] text-[#1B264F] text-[9px] font-black py-1.5 rounded-lg flex items-center justify-center gap-2 hover:bg-[#ffba1a] transition"><Bell size={12}/> Notify Leadership</button>
                     )}
                   </div>
@@ -195,7 +232,6 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
               <div className="bg-slate-50 p-4 rounded-2xl">
                 <h4 className="text-sm font-black text-[#1B264F]">{viewingTask.taskName}</h4>
                 <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">Deadline: {viewingTask.endDate}</p>
-                {/* Full description available inside the modal */}
                 <p className="text-[11px] text-slate-600 mt-2">{viewingTask.description}</p>
               </div>
 
@@ -210,17 +246,21 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
                 </div>
               </div>
 
-              {/* Only assigned members can see the input */}
-              {(viewingTask.assignedTo === userName || viewingTask.teamUpWith?.includes(userName)) ? (
-                <div className="pt-4 border-t border-slate-100">
-                  <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Write Update</p>
-                  <div className="flex gap-2">
-                    <input className="flex-1 text-[11px] p-3 bg-slate-50 border rounded-xl outline-none" placeholder="What progress have you made?" value={updateText} onChange={(e) => setUpdateText(e.target.value)} />
-                    <button onClick={addUpdate} className="p-3 bg-[#1B264F] text-white rounded-xl hover:bg-slate-800 transition"><CheckCircle2 size={18}/></button>
+              {/* RBAC: ONLY ALLOW UPDATES IF IT IS ASSIGNED TO THE USER */}
+              {!viewModeArchive ? (
+                (viewingTask.assignedTo === userName || viewingTask.teamUpWith?.includes(userName)) ? (
+                  <div className="pt-4 border-t border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Write Update</p>
+                    <div className="flex gap-2">
+                      <input className="flex-1 text-[11px] p-3 bg-slate-50 border rounded-xl outline-none" placeholder="What progress have you made?" value={updateText} onChange={(e) => setUpdateText(e.target.value)} />
+                      <button onClick={addUpdate} className="p-3 bg-[#1B264F] text-white rounded-xl hover:bg-slate-800 transition"><CheckCircle2 size={18}/></button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <p className="text-[9px] text-slate-400 italic text-center pt-4 border-t">Only assigned members can add updates.</p>
+                )
               ) : (
-                <p className="text-[9px] text-slate-400 italic text-center pt-4 border-t">Viewing as Leadership - Updates are read-only.</p>
+                <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-widest text-center pt-4 border-t">Historical Task - Read Only</p>
               )}
             </div>
           </div>
@@ -228,7 +268,7 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
       )}
 
       {/* EVENT CREATION MODAL */}
-      {showEventModal && (
+      {showEventModal && isLeadership && !viewModeArchive && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl border-t-[8px] border-[#1B264F]">
             <div className="flex justify-between items-center mb-6">
@@ -243,7 +283,6 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
               <input type="date" required className="w-full p-3 text-xs bg-slate-50 border rounded-xl outline-none" onChange={e => setEventForm({...eventForm, date: e.target.value})}/>
               <input placeholder="Event Incharge" className="w-full p-3 text-xs bg-slate-50 border rounded-xl outline-none" onChange={e => setEventForm({...eventForm, eventIncharge: e.target.value})}/>
               
-              {/* RESTORED: Event Description Input */}
               <textarea placeholder="Event Description..." rows="2" className="w-full p-3 text-xs bg-slate-50 border rounded-xl outline-none" onChange={e => setEventForm({...eventForm, description: e.target.value})}></textarea>
               
               <button className="w-full bg-[#1B264F] text-white font-black py-3 rounded-xl text-[10px] uppercase shadow-lg hover:bg-slate-800 transition">Sync with Calendar</button>
@@ -254,7 +293,7 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
       )}
 
       {/* TASK CREATION MODAL */}
-      {showTaskModal && (
+      {showTaskModal && isLeadership && !viewModeArchive && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl border-t-[8px] border-blue-600">
             <div className="flex justify-between items-center mb-6">
@@ -278,7 +317,6 @@ const Jovial = ({ userRole, userName = "Bhoomika Wandhekar" }) => {
               
               <input placeholder="Collaborators (Team up with)" className="w-full p-3 text-xs bg-slate-50 border rounded-xl" onChange={e => setTaskForm({...taskForm, teamUpWith: e.target.value})}/>
               
-              {/* RESTORED: Task Description Input */}
               <textarea placeholder="Description..." rows="2" className="w-full p-3 text-xs bg-slate-50 border rounded-xl outline-none" onChange={e => setTaskForm({...taskForm, description: e.target.value})}></textarea>
               
               <button className="w-full bg-blue-600 text-white font-black py-3 rounded-xl text-[10px] uppercase shadow-lg hover:bg-blue-700 transition">Confirm Sync</button>

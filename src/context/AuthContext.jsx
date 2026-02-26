@@ -11,18 +11,31 @@ export const AuthProvider = ({ children }) => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // --- NEW: GLOBAL TIME MACHINE STATE ---
+  // We use sessionStorage so the archive view survives page navigation and refreshes
+  const [viewModeArchive, setViewModeArchive] = useState(() => {
+    const saved = sessionStorage.getItem('titans_archive_view');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Automatically sync to browser storage whenever it changes
+  useEffect(() => {
+    if (viewModeArchive) {
+      sessionStorage.setItem('titans_archive_view', JSON.stringify(viewModeArchive));
+    } else {
+      sessionStorage.removeItem('titans_archive_view');
+    }
+  }, [viewModeArchive]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
-          // Changed currentUser.uid to currentUser.email
           const userDoc = await getDoc(doc(db, "users", currentUser.email));
           if (userDoc.exists()) {
             const data = userDoc.data();
             setUserData(data);
             setRole(data.role);
-          } else {
-            console.log("No user document found for this email in Firestore.");
           }
           setUser(currentUser);
         } else {
@@ -41,7 +54,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, role, userData, loading }}>
+    <AuthContext.Provider value={{ user, role, userData, loading, viewModeArchive, setViewModeArchive }}>
       {children}
     </AuthContext.Provider>
   );

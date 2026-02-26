@@ -1,24 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from './context/AuthContext'; 
 import { 
   Megaphone, Send, Clock, ShieldCheck, Edit3, Trash2, X, Check, 
-  Search, AlertCircle, Calendar, Tag
+  Search, AlertCircle, Calendar, Tag, Eye
 } from 'lucide-react';
 import { logActivity } from './utils/logger'; 
 
-const NoticeBoard = ({ userName = "Bhoomika Wandhekar", userPosition = "President" }) => {
+const NoticeBoard = () => {
   const [notices, setNotices] = useState([]);
   const [input, setInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('General Info');
   const [searchTerm, setSearchTerm] = useState('');
   
+  // --- RBAC & GLOBAL STATE ---
+  const { userData, role, viewModeArchive } = useAuth(); 
+  const userName = userData?.name || "Unknown User";
+  const userPosition = userData?.position || "Member";
+
   // Edit States
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
 
-  const authorizedPositions = ["President", "Vice President", "Secretary"];
-  const canPost = authorizedPositions.includes(userPosition);
+  // Strict RBAC: Only Admins and Executives can broadcast. Locks out in Archive mode.
+  const canPost = (role === 'admin' || role === 'executive') && !viewModeArchive;
 
   const categories = {
     "General Info": { icon: Tag, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
@@ -27,16 +33,27 @@ const NoticeBoard = ({ userName = "Bhoomika Wandhekar", userPosition = "Presiden
   };
 
   useEffect(() => {
+    if (viewModeArchive) {
+      const archivedNotices = viewModeArchive.notices || [];
+      const sorted = [...archivedNotices].sort((a, b) => {
+        const timeA = a.timestamp?.seconds ? a.timestamp.seconds * 1000 : new Date(a.timestamp || 0).getTime();
+        const timeB = b.timestamp?.seconds ? b.timestamp.seconds * 1000 : new Date(b.timestamp || 0).getTime();
+        return timeB - timeA;
+      });
+      setNotices(sorted);
+      return;
+    }
+
     const q = query(collection(db, "notices"), orderBy("timestamp", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setNotices(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return () => unsubscribe();
-  }, []);
+  }, [viewModeArchive]);
 
   const postNotice = async (e) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || !canPost) return;
 
     try {
       const officialTitle = `TITANS, ${userPosition}`;
@@ -57,6 +74,7 @@ const NoticeBoard = ({ userName = "Bhoomika Wandhekar", userPosition = "Presiden
   };
 
   const handleDelete = async (id, text) => {
+    if (!canPost) return;
     if (window.confirm("Are you sure you want to delete this official notice?")) {
       await deleteDoc(doc(db, "notices", id));
       await logActivity(userName, userPosition, "Deleted Notice", `Removed broadcast.`);
@@ -64,7 +82,7 @@ const NoticeBoard = ({ userName = "Bhoomika Wandhekar", userPosition = "Presiden
   };
 
   const handleSaveEdit = async (id) => {
-    if (!editText.trim()) return;
+    if (!editText.trim() || !canPost) return;
     await updateDoc(doc(db, "notices", id), { text: editText });
     await logActivity(userName, userPosition, "Edited Notice", `Updated existing broadcast.`);
     setEditingId(null);
@@ -74,6 +92,15 @@ const NoticeBoard = ({ userName = "Bhoomika Wandhekar", userPosition = "Presiden
     n.text.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (n.category && n.category.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const renderDate = (ts) => {
+    if (!ts) return "";
+    try {
+      return ts.toDate 
+        ? ts.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : new Date(ts.seconds ? ts.seconds * 1000 : ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return "Unknown Date"; }
+  };
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] antialiased">
@@ -110,7 +137,6 @@ const NoticeBoard = ({ userName = "Bhoomika Wandhekar", userPosition = "Presiden
                 </div>
               </div>
 
-              {/* The text area now flexes to fill all remaining vertical space */}
               <div className="space-y-1.5 flex-1 flex flex-col min-h-0">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Message</label>
                 <textarea 
@@ -130,10 +156,23 @@ const NoticeBoard = ({ userName = "Bhoomika Wandhekar", userPosition = "Presiden
             </form>
           </div>
         ) : (
-          <div className="bg-slate-100 rounded-[1.5rem] p-6 text-center border border-slate-200 flex flex-col items-center justify-center h-full opacity-70">
-             <ShieldCheck size={32} className="text-slate-400 mb-2"/>
-             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Read-Only View</p>
-             <p className="text-[10px] text-slate-400 mt-1">Only the Core Committee can broadcast.</p>
+          <div className="bg-slate-100/50 rounded-[1.5rem] p-6 text-center border border-slate-200 flex flex-col items-center justify-center h-full relative overflow-hidden group">
+             {viewModeArchive && <div className="absolute inset-0 bg-emerald-50/50"></div>}
+             <div className="relative z-10">
+               {viewModeArchive ? (
+                 <>
+                   <Eye size={36} className="text-emerald-500 mb-3 mx-auto animate-pulse"/>
+                   <p className="text-xs font-black text-emerald-800 uppercase tracking-widest">Historical View Active</p>
+                   <p className="text-[10px] text-emerald-600 font-medium mt-1">Broadcast capabilities are locked to preserve the timeline.</p>
+                 </>
+               ) : (
+                 <>
+                   <ShieldCheck size={32} className="text-slate-400 mb-2 mx-auto"/>
+                   <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Read-Only View</p>
+                   <p className="text-[10px] text-slate-400 mt-1">Only the Leadership can broadcast official notices.</p>
+                 </>
+               )}
+             </div>
           </div>
         )}
       </div>
@@ -141,6 +180,12 @@ const NoticeBoard = ({ userName = "Bhoomika Wandhekar", userPosition = "Presiden
       {/* ================= RIGHT: THE FEED ================= */}
       <div className="w-full lg:w-2/3 bg-white rounded-[1.5rem] border border-slate-200 shadow-sm flex flex-col overflow-hidden h-full">
         
+        {viewModeArchive && (
+          <div className="bg-emerald-50 border-b border-emerald-200 p-2 text-center text-[10px] font-black text-emerald-700 uppercase tracking-widest flex justify-center items-center gap-2 shrink-0">
+             <Eye size={14}/> Viewing Archived Notices for {viewModeArchive.id}
+          </div>
+        )}
+
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="bg-blue-100 p-1.5 rounded-lg text-blue-600"><Clock size={16}/></div>
@@ -184,7 +229,7 @@ const NoticeBoard = ({ userName = "Bhoomika Wandhekar", userPosition = "Presiden
                     
                     <div className="flex items-center gap-3">
                       <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                        {n.timestamp?.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {renderDate(n.timestamp)}
                       </span>
                       
                       {canPost && editingId !== n.id && (
@@ -221,7 +266,6 @@ const NoticeBoard = ({ userName = "Bhoomika Wandhekar", userPosition = "Presiden
           )}
         </div>
       </div>
-
     </div>
   );
 };
