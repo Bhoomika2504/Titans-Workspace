@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@layer base {
+  :root {
+    --titans-navy: #1B264F;
+    --titans-gold: #FFB100;
+    --titans-gold-light: #FFD369;
+    --titans-slate: #2C3E50;
+    --titans-bg: #F4F7FA;
+  }
+}
+
+/* Custom Scrollbar for a Premium Look */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--titans-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--titans-navy);
+  border-radius: 10px;
+}
