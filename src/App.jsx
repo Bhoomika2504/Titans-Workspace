@@ -15,3 +15,20 @@ function App() {
 }
 
 export default App;
+
+// to bulk upload team members to Firestore, run this component once and then comment it out again. 
+/*
+import React from 'react';
+import UploadTeam from './UploadTeam'; 
+
+function App() {
+  return (
+    <div className="min-h-screen bg-slate-100 p-10">
+      <UploadTeam />
+    </div>
+  );
+}
+
+export default App;
+
+*/

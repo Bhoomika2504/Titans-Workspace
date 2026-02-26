@@ -15,11 +15,14 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+          // Changed currentUser.uid to currentUser.email
+          const userDoc = await getDoc(doc(db, "users", currentUser.email));
           if (userDoc.exists()) {
             const data = userDoc.data();
             setUserData(data);
             setRole(data.role);
+          } else {
+            console.log("No user document found for this email in Firestore.");
           }
           setUser(currentUser);
         } else {

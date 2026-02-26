@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, onSnapshot, doc, writeBatch } from 'firebase/firestore';
-import { logActivity } from './utils/logger'; // Import the logger
+import { logActivity } from './utils/logger'; 
 import { 
   Shield, Zap, Award, Star, Trophy, Music, Megaphone, Camera, 
   ShieldAlert, BookOpen, RotateCcw, RotateCw, UserPlus, UserMinus, 
@@ -18,9 +18,42 @@ const TeamHierarchy = ({ role }) => {
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ name: '', position: '', class: '', team: 'Technical' });
 
+  // RBAC: Only admin (President) can edit the hierarchy
+  const isAdmin = role === 'admin';
+
+  // Helper to auto-categorize positions into teams since the DB only has 'department: IT'
+ const getTeamName = (pos = '') => {
+    const p = pos.toLowerCase();
+    
+    if (p.includes('cultural') || p.includes('art') || p.includes('anchor') || p.includes('event') || p.includes('dance')) return 'Cultural';
+    if (p.includes('sport')) return 'Sport';
+    if (p.includes('technical') || p.includes('developer')) return 'Technical';
+    
+    // FIX: Using \b to ensure it only matches the exact word "pr", not the letters inside "president"
+    if (/\bpr\b/.test(p) || p.includes('marketing')) return 'PR'; 
+    
+    if (p.includes('multimedia') || p.includes('social media') || p.includes('designer') || p.includes('videographer')) return 'Multimedia';
+    if (p.includes('discipline')) return 'Discipline';
+    if (p.includes('documentation') || p.includes('magazine') || p.includes('report')) return 'Drafting';
+    
+    return 'Core'; 
+  };
+
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "users"), (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      let data = snap.docs.map(d => {
+        const docData = d.data();
+        return {
+          id: d.id,
+          ...docData,
+          // Assign the team dynamically based on their position title
+          team: docData.team || getTeamName(docData.position)
+        };
+      });
+      
+      // Sort members by their hierarchy level
+      data.sort((a, b) => (a.hierarchyLevel || 99) - (b.hierarchyLevel || 99));
+
       setMembers(data);
       if (draft.length === 0) setDraft(data);
     });
@@ -60,7 +93,6 @@ const TeamHierarchy = ({ role }) => {
   };
 
   const removeFromDraft = (id, position) => {
-    // President Lock Logic
     if (position === 'President') {
       alert("Presidential post is locked and cannot be deleted.");
       return;
@@ -79,16 +111,15 @@ const TeamHierarchy = ({ role }) => {
       const batch = writeBatch(db);
       draft.forEach((m) => {
         const isNew = m.id.startsWith('temp');
-        const ref = doc(db, "users", isNew ? undefined : m.id);
+        const ref = doc(db, "users", isNew ? m.email || m.id : m.id);
         const { id, ...data } = m;
-        batch.set(ref, data);
+        batch.set(ref, data, { merge: true });
       });
       
       await batch.commit();
 
-      // Log the administrative action to Activity Logs
       await logActivity(
-        "Bhoomika Wandhekar", 
+        "System Admin", 
         "President", 
         "Synchronized Team Data", 
         `Updated structure for ${draft.length} committee members`
@@ -101,7 +132,7 @@ const TeamHierarchy = ({ role }) => {
     }
   };
 
-  const getMember = (pos) => draft.find(m => m.position === pos) || { name: "Bhoomika Wandhekar", class: "BE" };
+  const getMember = (pos) => draft.find(m => m.position === pos) || { id: 'unassigned', name: "Not Assigned", class: "TBD" };
   const getTeam = (teamName) => draft.filter(m => m.team === teamName);
   const isChanged = JSON.stringify(members) !== JSON.stringify(draft);
 
@@ -118,24 +149,26 @@ const TeamHierarchy = ({ role }) => {
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto antialiased">
       
-      {/* --- ADMIN TOOLBAR --- */}
-      <div className="flex justify-between items-center bg-white py-2 px-4 rounded-2xl shadow-sm border border-slate-200">
-        <div className="flex gap-1.5 bg-slate-100 p-1 rounded-lg">
-          <button onClick={undo} disabled={history.length === 0} title="Undo" className="p-1.5 hover:bg-white rounded-md disabled:opacity-20 transition"><RotateCcw size={16}/></button>
-          <button onClick={redo} disabled={redoStack.length === 0} title="Redo" className="p-1.5 hover:bg-white rounded-md disabled:opacity-20 transition"><RotateCw size={16}/></button>
-        </div>
-        
-        <div className="flex gap-2">
-          <button onClick={() => setShowAddModal(true)} className="bg-[#1B264F] text-white px-4 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1.5 hover:bg-slate-800 transition uppercase tracking-wider">
-            <UserPlus size={14}/> Add Member
-          </button>
-          {isChanged && (
-            <button onClick={commitChanges} className="bg-emerald-600 text-white px-4 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1.5 shadow-md uppercase tracking-wider animate-pulse">
-              <Save size={14}/> Sync Data
+      {/* --- ADMIN TOOLBAR (ONLY VISIBLE TO PRESIDENT) --- */}
+      {isAdmin && (
+        <div className="flex justify-between items-center bg-white py-2 px-4 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex gap-1.5 bg-slate-100 p-1 rounded-lg">
+            <button onClick={undo} disabled={history.length === 0} title="Undo" className="p-1.5 hover:bg-white rounded-md disabled:opacity-20 transition"><RotateCcw size={16}/></button>
+            <button onClick={redo} disabled={redoStack.length === 0} title="Redo" className="p-1.5 hover:bg-white rounded-md disabled:opacity-20 transition"><RotateCw size={16}/></button>
+          </div>
+          
+          <div className="flex gap-2">
+            <button onClick={() => setShowAddModal(true)} className="bg-[#1B264F] text-white px-4 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1.5 hover:bg-slate-800 transition uppercase tracking-wider">
+              <UserPlus size={14}/> Add Member
             </button>
-          )}
+            {isChanged && (
+              <button onClick={commitChanges} className="bg-emerald-600 text-white px-4 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1.5 shadow-md uppercase tracking-wider animate-pulse">
+                <Save size={14}/> Sync Data
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* --- PRESIDENT HERO --- */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -146,7 +179,7 @@ const TeamHierarchy = ({ role }) => {
           <div className="relative z-10">
             <span className="bg-[#FFB100] text-[#1B264F] px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Presidential Office</span>
             <div className="flex items-center gap-3 mt-4">
-              {editingId === getMember("President").id ? (
+              {isAdmin && editingId === getMember("President").id ? (
                 <input 
                   className="bg-white/10 border-b-2 border-[#FFB100] text-4xl font-black outline-none px-1" 
                   value={getMember("President").name} 
@@ -157,7 +190,9 @@ const TeamHierarchy = ({ role }) => {
               ) : (
                 <>
                   <h2 className="text-4xl font-black tracking-tighter">{getMember("President").name}</h2>
-                  <button onClick={() => setEditingId(getMember("President").id)} className="opacity-0 group-hover:opacity-100 transition text-[#FFB100]"><Edit3 size={16}/></button>
+                  {isAdmin && (
+                    <button onClick={() => setEditingId(getMember("President").id)} className="opacity-0 group-hover:opacity-100 transition text-[#FFB100]"><Edit3 size={16}/></button>
+                  )}
                 </>
               )}
             </div>
@@ -171,9 +206,11 @@ const TeamHierarchy = ({ role }) => {
           <div>
             <div className="flex justify-between items-center">
               <p className="text-[9px] font-black uppercase tracking-widest text-red-200">Vice President</p>
-              <button onClick={() => setEditingId(getMember("Vice President").id)} className="opacity-0 group-hover:opacity-100 transition text-red-200"><Edit3 size={14}/></button>
+              {isAdmin && (
+                <button onClick={() => setEditingId(getMember("Vice President").id)} className="opacity-0 group-hover:opacity-100 transition text-red-200"><Edit3 size={14}/></button>
+              )}
             </div>
-            {editingId === getMember("Vice President").id ? (
+            {isAdmin && editingId === getMember("Vice President").id ? (
               <input 
                 className="bg-white/10 border-b border-white w-full text-2xl font-bold outline-none mt-1" 
                 value={getMember("Vice President").name} 
@@ -196,7 +233,9 @@ const TeamHierarchy = ({ role }) => {
               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{pos}</p>
               <div className="flex items-center gap-2">
                 <h4 className="text-base font-bold text-[#1B264F] tracking-tight">{getMember(pos).name}</h4>
-                <button onClick={() => setEditingId(getMember(pos).id)} className="opacity-0 group-hover:opacity-100 transition text-slate-300"><Edit3 size={12}/></button>
+                {isAdmin && (
+                  <button onClick={() => setEditingId(getMember(pos).id)} className="opacity-0 group-hover:opacity-100 transition text-slate-300"><Edit3 size={12}/></button>
+                )}
               </div>
             </div>
             <Award size={16} className="text-[#FFB100] opacity-30 group-hover:opacity-100 transition-opacity"/>
@@ -217,7 +256,9 @@ const TeamHierarchy = ({ role }) => {
                 <div key={m.id} className="border-l-2 border-slate-50 pl-3 py-0.5 hover:border-[#FFB100] transition-all relative group/member">
                   <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter mb-0.5">{m.position}</p>
                   <p className="text-xs font-bold text-[#1B264F] tracking-tight">{m.name}</p>
-                  <button onClick={() => removeFromDraft(m.id, m.position)} className="absolute right-0 top-1 opacity-0 group-hover/member:opacity-100 transition text-red-400"><X size={10}/></button>
+                  {isAdmin && (
+                    <button onClick={() => removeFromDraft(m.id, m.position)} className="absolute right-0 top-1 opacity-0 group-hover/member:opacity-100 transition text-red-400"><X size={10}/></button>
+                  )}
                 </div>
               ))}
             </div>
@@ -226,7 +267,7 @@ const TeamHierarchy = ({ role }) => {
       </div>
 
       {/* --- ADD MODAL --- */}
-      {showAddModal && (
+      {showAddModal && isAdmin && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-[1.5rem] p-8 w-full max-w-sm shadow-2xl border-t-[8px] border-[#1B264F]">
             <div className="flex justify-between items-center mb-5">
