@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { db } from './firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 import { ShieldCheck, UploadCloud } from 'lucide-react';
 
 const UploadTeam = () => {
@@ -62,16 +63,14 @@ const UploadTeam = () => {
   ];
 
   const handleUpload = async () => {
-    setStatus("Uploading to Firebase...");
+    const loadToast = toast.loading("Uploading TITANS roster...");
     try {
       for (const user of teamData) {
-        // This uses the email as the unique document ID instead of a random string!
         await setDoc(doc(db, "users", user.email), user);
       }
-      setStatus("✅ Success! All 37 members uploaded.");
+      toast.success("All 37 members uploaded successfully!", { id: loadToast });
     } catch (error) {
-      console.error(error);
-      setStatus("❌ Error uploading. Check console.");
+      toast.error("Upload failed. Check console.", { id: loadToast });
     }
   };
 

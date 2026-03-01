@@ -11,14 +11,11 @@ export const AuthProvider = ({ children }) => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // --- NEW: GLOBAL TIME MACHINE STATE ---
-  // We use sessionStorage so the archive view survives page navigation and refreshes
   const [viewModeArchive, setViewModeArchive] = useState(() => {
     const saved = sessionStorage.getItem('titans_archive_view');
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Automatically sync to browser storage whenever it changes
   useEffect(() => {
     if (viewModeArchive) {
       sessionStorage.setItem('titans_archive_view', JSON.stringify(viewModeArchive));
@@ -29,6 +26,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setLoading(true);
       try {
         if (currentUser) {
           const userDoc = await getDoc(doc(db, "users", currentUser.email));
@@ -36,15 +34,20 @@ export const AuthProvider = ({ children }) => {
             const data = userDoc.data();
             setUserData(data);
             setRole(data.role);
+            setUser(currentUser);
+          } else {
+            // Logged in but not in TITANS database
+            setUser(null);
+            setRole(null);
+            setUserData(null);
           }
-          setUser(currentUser);
         } else {
           setUser(null);
           setRole(null);
           setUserData(null);
         }
       } catch (error) {
-        console.error("Auth Error:", error);
+        console.error("Critical Auth Error:", error);
       } finally {
         setLoading(false);
       }
