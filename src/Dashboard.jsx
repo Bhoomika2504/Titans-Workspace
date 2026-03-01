@@ -1,10 +1,12 @@
 import React, { useState, Suspense } from 'react';
 import { useAuth } from './context/AuthContext';
-import { auth } from './firebase';
+import { signOut } from 'firebase/auth';
+import { auth } from './firebase'; 
+import { useNavigate } from 'react-router-dom';
 import { Layout, Calendar, Shield, Users, History, MessageSquare, LogOut, Grid } from 'lucide-react';
 
 // Lazy load views for the TITANS Workspace
-const Home = React.lazy(() => import('./Home')); // Added Home import
+const Home = React.lazy(() => import('./Home')); 
 const NoticeBoard = React.lazy(() => import('./NoticeBoard'));
 const Jovial = React.lazy(() => import('./Jovial'));
 const EventCalendar = React.lazy(() => import('./EventCalendar'));
@@ -15,6 +17,23 @@ const QueryPortal = React.lazy(() => import('./QueryPortal'));
 const Dashboard = () => {
   const { role, userData, loading } = useAuth();
   const [activeView, setActiveView] = useState('home');
+  const navigate = useNavigate();
+
+  // --- LOGOUT ENGINE ---
+  const handleLogout = async () => {
+    try {
+      // 1. Log out of Firebase Auth
+      await signOut(auth);
+      
+      // 2. Clear Time Machine state so the next person doesn't load into an archive
+      sessionStorage.removeItem('titans_archive_view');
+      
+      // 3. Kick back to the login screen
+      navigate('/'); 
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  };
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-[#1B264F] text-white font-bold">
@@ -35,7 +54,6 @@ const Dashboard = () => {
         </div>
         
         <div className="space-y-1 flex-1">
-          {/* Added Home Overview Button */}
           <NavBtn label="Home Overview" icon={<Grid size={16}/>} active={activeView === 'home'} onClick={() => setActiveView('home')} />
           <NavBtn label="Notice Board" icon={<Layout size={16}/>} active={activeView === 'notice'} onClick={() => setActiveView('notice')} />
           <NavBtn label="Event Calendar" icon={<Calendar size={16}/>} active={activeView === 'calendar'} onClick={() => setActiveView('calendar')} />
@@ -58,7 +76,8 @@ const Dashboard = () => {
           </button>
         </div>
 
-        <button onClick={() => auth.signOut()} className="mt-6 flex items-center gap-2 text-slate-400 hover:text-white transition group px-2">
+        {/* UPDATED LOGOUT BUTTON */}
+        <button onClick={handleLogout} className="mt-6 flex items-center gap-2 text-slate-400 hover:text-white transition group px-2">
           <LogOut size={16} className="group-hover:translate-x-1 transition-transform"/> 
           <span className="font-bold text-xs">Logout</span>
         </button>
@@ -69,7 +88,7 @@ const Dashboard = () => {
         <header className="px-6 py-2.5 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-20 shadow-sm min-h-[80px]">
           <div className="flex flex-col justify-center">
             <h2 className="text-xl font-bold text-slate-800 leading-tight">Welcome, {userData?.name || "Bhoomika Wandhekar"}</h2>
-            <p className="text-blue-600 text-[10px] font-black uppercase tracking-widest mt-0.5">{userData?.position || "President"} | ADMIN</p>
+            <p className="text-blue-600 text-[10px] font-black uppercase tracking-widest mt-0.5">{userData?.position || "President"} | {role?.toUpperCase() || "ADMIN"}</p>
           </div>
           <div className="flex-shrink-0 flex items-center h-14">
             <img src="/Untitled37.jpg" alt="Trinity College" className="h-14 w-auto p-0 shadow-none rounded-none object-contain" />
@@ -79,21 +98,16 @@ const Dashboard = () => {
         <div className="p-6 max-w-[1600px] mx-auto">
           <Suspense fallback={<div className="text-center p-20 font-bold text-slate-400">Loading Module...</div>}>
             
-            {/* 🚀 Replaced Hardcoded layout with your new Home.jsx */}
-            {activeView === 'home' && <Home userName={userData?.name || "Bhoomika Wandhekar"} userRole={role} />}
+            {activeView === 'home' && <Home />}
             
-            {/* Added dedicated Notice Board view */}
             {activeView === 'notice' && (
               <div className="h-full">
-                <NoticeBoard 
-                  userName={userData?.name || "Bhoomika Wandhekar"} 
-                  userPosition={userData?.position || "President"} 
-                />
+                <NoticeBoard />
               </div>
             )}
             
-            {activeView === 'calendar' && <EventCalendar role={role} />}
-            {activeView === 'jovial' && <Jovial userRole={role} userName={userData?.name || "Bhoomika Wandhekar"} />}
+            {activeView === 'calendar' && <EventCalendar />}
+            {activeView === 'jovial' && <Jovial />}
             {activeView === 'team' && <TeamHierarchy role={role} />}
             {activeView === 'activity' && <ActivityLog />}
             {activeView === 'queries' && <QueryPortal />}
